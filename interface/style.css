@@ -1,0 +1,42 @@
+table#table-requests {
+    border: 2px solid #003066;
+}
+
+table#table-requests td {
+    border: 2px solid #003066;
+    padding: 10px;
+}
+
+tr#header {
+    background: #6ba7cc;
+    color: #FAFAFA;
+    font-weight: bold;
+    text-align: center;
+}
+
+span.label {
+    display: inline-block;
+    width: 80px;
+    margin: 10px 30px 10px 10px;
+    color: #003066;
+}
+.edit-tool, .delete-tool {
+    cursor: pointer;
+}
+
+.tool-btn {
+    border-color: #003066;
+    border-radius: 5px;
+    -moz-border-radius: 5px;
+    -webkit-border-radius: 5px;
+    color: #FAFAFA;
+    background: #003066;
+    text-align: center;
+    text-align: -moz-center;
+    text-align: -webkit-center;
+    padding: 5px 10px;
+}
+
+.safe-btn.tool-btn {
+    margin-right: 30px;
+}
