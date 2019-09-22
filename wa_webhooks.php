@@ -1,68 +1,67 @@
 <?php
+ini_set("display_errors", 'on');
+error_reporting(E_ALL);
 require_once __DIR__ . '/../app/classes/autoloader.php';
 include_once __DIR__ . '/../dop/lib/db/Database.php';
+include __DIR__ . '../passwords.php';
+$Database_wa = new Database( $DB_wapp['name'], $DB_wapp['pass'], $DB_wapp['host'], $DB_wapp['last']);
 
-$Database_wa = new Database('', '', '', '');
 $amo = new \AmoCRM\Client($_POST['subdomain'], $_POST['admin_email'], $_POST['admin_api']);
 
 $data = json_decode($_POST['data_json'], true);
 
-file_put_contents('../whatsapp_widget_lis/logs/log.json', "eiiee   ");
-
 foreach ($data['messages'] as $message) {
-    $black = $Database_wa->getRows("SELECT * FROM wa_black_list WHERE subdomain = ?", [$_POST['subdomain']]);
+
     if (count(explode("-", $message["chatId"])) > 1) {
         continue;
     }
+
     $phone = explode("@", $message["chatId"])[0];
 
-    foreach ($black as $line) {
-        if ($line['number'] == mb_substr($phone, 1)) {
-            continue;
-        }
-    }
-
     $contact = getContact($phone);
+
     $contact_id = $contact["id"];
     $lead_id = getLeadId($contact);
 
-    file_put_contents('../whatsapp_widget_lis/logs/log.json', $lead_id, FILE_APPEND);
-    file_put_contents('../whatsapp_widget_lis/logs/log.json',$_POST['subdomain'],FILE_APPEND);
 
     $contact_name = $contact["name"];
-    if ($_POST['subdomain'] == 'skyap') {
+    //file_put_contents('logs/log1.json', $lead_id . ' - ' . $contact_id . ' - ' . $phone. ' - ' . $message["senderName"]);
 
-        if ($message["fromMe"] == 1) {
-            checkAndCreate($lead_id, $contact_id, $phone, $message["senderName"]);
-            $title = "Сообщение в WhatsApp ОТПРАВЛЕНО контакту " . $contact_name . " (+" . $phone . "):\n";
-        } else {
-            checkAndCreate($lead_id, $contact_id, $phone, $message["senderName"]);
-            $title = "Сообщение в WhatsApp ПОЛУЧЕНО от контакта " . $contact_name . " (+" . $phone . "):\n";
-        }
+    if ($message["fromMe"] == 1) {
+        // file_put_contents('logs/log1.json','root: ' . $phone . ' - ' . $contact_id. ' - ' . $contact_name . '\n');
+        checkAndCreate($lead_id, $contact_id, $phone, $message["senderName"]);
+        $title = "Сообщение в WhatsApp ОТПРАВЛЕНО контакту " . $contact_name . " (+" . $phone . "):\n";
+    } else {
+        checkAndCreate($lead_id, $contact_id, $phone, $message["senderName"]);
+        $title = "Сообщение в WhatsApp ПОЛУЧЕНО от контакта " . $contact_name . " (+" . $phone . "):\n";
     }
-    if($_POST['subdomain']=='1343328msk'){
-        if ($message["fromMe"] == 1) {
-            $title = "Сообщение в WhatsApp ОТПРАВЛЕНО контакту " . $contact_name . " (+" . $phone . "):\n";
-        } else {
-            $title = "Сообщение в WhatsApp ПОЛУЧЕНО от контакта " . $contact_name . " (+" . $phone . "):\n";
-        }
-    }
-    file_put_contents('../whatsapp_widget_lis/logs/log.json', $contact_id, FILE_APPEND);
+    // file_put_contents('logs/log1.json', "brrr" );
 
     if ($contact_id != null) {
+        // file_put_contents('logs/log1.json', "mmmmmmmmm" );
         makeNote($contact_id, $title . $message["body"]);
-        file_put_contents('../whatsapp_widget_lis/logs/log.json', "  cotact_id ", FILE_APPEND);
+        //file_put_contents('logs/log1.json', $contact_id. $title . $message["body"] );
 
     }
 }
 
+
 function getContact($phone)
 {
+
     global $amo;
     $phone = preg_replace("/[^,.0-9]/", '', $phone);
-    $amoRequest = $amo->contact->apiList([
+    // file_put_contents('logs/log1.json', mb_substr($phone, 1));
+    $parametrs = [
         'query' => mb_substr($phone, 1)
-    ]);
+    ];
+
+    // file_put_contents('logs/log1.json',  get_class_methods($amo->contact), FILE_APPEND);
+    $amoRequest = $amo->contact->apiList($parametrs);
+
+    // file_put_contents('logs/log1.json', "Lala", FILE_APPEND);
+
+
     return !empty($amoRequest) ? $amoRequest[0] : null;
 }
 
@@ -83,21 +82,31 @@ function makeNote($contact_id, $message)
     $note['note_type'] = \AmoCRM\Models\Note::COMMON; // @see //developers.amocrm.ru/rest_api/notes_type.php
     $note['text'] = $message;
     $result = $note->apiAdd();
+
 }
 
 function checkAndCreate(&$lead_id, &$contact_id, $phone, $name)
 {
+    echo $contact_id;
+
+    echo $name;
+    echo $lead_id;
+
     global $amo;
     $flag = false;
+    file_put_contents('logs/log1.json', 'c&c: ' . $lead_id . ' - ' . $contact_id . '\n', FILE_APPEND);
     if ($lead_id == null) {
+        file_put_contents('logs/log1.json', "mmmm  yyy\n", FILE_APPEND);
         $flag = true;
         $lead = $amo->lead;
         $lead['name'] = 'Заявка из WhatsApp ' . $phone;
         $lead['date_create'] = 'now';
 //        $lead['status_id'] = 11996545;
         $lead_id = $lead->apiAdd();
+
     }
     if ($contact_id == null) {
+        file_put_contents('logs/log1.json', ";;;  ttt\n", FILE_APPEND);
         $contact = $amo->contact;
         $contact['name'] = $name;
         $contact['linked_leads_id'] = $lead_id;
@@ -106,8 +115,9 @@ function checkAndCreate(&$lead_id, &$contact_id, $phone, $name)
         ]);
         $contact_id = $contact->apiAdd();
     } else if ($flag) {
+
         $contact = $amo->contact;
         $contact['linked_leads_id'] = $lead_id;
         $contact->apiUpdate($contact_id);
-    }
+    } 
 }
