@@ -3,15 +3,15 @@ include_once 'init/wa_db_init.php';
 
 file_put_contents('logs.txt', "GET " . print_r($_GET, true) . "\nPOST " . print_r($_POST, true) . PHP_EOL, FILE_APPEND | LOCK_EX);
 
-const TEST_ACCESS_INSTANCE = "https://eu8.chat-api.com/instance10646/";
+const TEST_ACCESS_INSTANCE = "https://eu15.chat-api.com/instance48696/";
 
 function getCountMessagesBySubdomain($subdomain)
 {
     global $Database_wa;
-    $query = "SELECT count(*) FROM messages_history WHERE subdomain = ?";
+    $query = "SELECT count(*) as count FROM messages_history WHERE subdomain = ?";
     $vals = [$subdomain];
     $res = $Database_wa->getRows($query, $vals);
-    $count = $res[0]['count(*)'];
+    $count = $res[0]['count'];
     return $count;
 }
 
@@ -25,7 +25,7 @@ function setMessageToHistory($subdomain, $apiUrl, $phone, $text, $result)
 
 function sendByAllContacts($subdomain, $phones, $message, $apiURL, $token)
 {
-    $result = [];
+    $resArr = [];
     for ($i = 0; $i < count($phones); $i++) { // отправка сообщения всем контантам
         $data = [
             'phone' => $phones[$i], // Телефон получателя
@@ -33,32 +33,31 @@ function sendByAllContacts($subdomain, $phones, $message, $apiURL, $token)
         ];
         $json = json_encode($data);
         $url = $apiURL . 'message?token=' . $token;
-        $options = stream_context_create(['http' => [
+
+        $http_params = ['http' => [
             'method' => 'POST',
             'header' => 'Content-type: application/json',
             'content' => $json
-        ]
-        ]);
-        file_put_contents(__DIR__."/logs/govnichebleat_kolenb.txt",print_r(['http' => [
-            'method' => 'POST',
-            'header' => 'Content-type: application/json',
-            'content' => $json
-        ]
-        ], true));
-        file_put_contents(__DIR__."/logs/govnichebleat_kolenb2.txt",print_r($url, true));
+        ]];
+
+        $options = stream_context_create($http_params);
+        file_put_contents(__DIR__."/logs/govnichebleat_kolenb.txt",print_r($http_params, true));
+        // file_put_contents(__DIR__."/logs/govnichebleat_kolenb2.txt",print_r($url, true));
 
         $post = file_get_contents($url, false, $options);
-        $result[$i] = $post['sent'];
+        $resArr[$i] = $post['sent'];
 
         ob_start();
         var_dump($post['sent']);
         $output = ob_get_clean();
 
-        file_put_contents(__DIR__."/logs/govnichebleat.txt",$output);
+        file_put_contents(__DIR__."/logs/logs.txt", $apiURL);
+        file_put_contents(__DIR__."/logs/logs.txt", $url, FILE_APPEND);
 
         setMessageToHistory($subdomain, $apiURL, $phones[$i], $message, json_encode($post));
     }
-    return $result;
+    
+    return ['success' => true, 'result' => $resArr];
 }
 
 if (isset($_POST['tool'])) { // если в скрипт пришли для каких-то модификаций
@@ -74,6 +73,17 @@ if (isset($_POST['tool'])) { // если в скрипт пришли для к�
         $condition = [$edit_name, $edit_text, $edit_id];
         $Database_wa->updateRow($query, $condition);
         echo "Edit is successful";
+    }
+
+    if ($tool === 'infosetting') {
+        $subdomain = $_POST['subdomain'];
+        
+        $query = "SELECT * FROM wa_requests WHERE subdomain=? LIMIT 1";
+        $condition = [$subdomain];
+        $table = $Database_req->getRows($query, $condition);
+        $AMO_API_key = $table[0]['AMO_API_key'];
+        echo json_encode($AMO_API_key);
+        //echo "lll";
     }
 
     // если добавление блока ///////////////////////////////////////////////////////////////////////////////////////////
@@ -113,9 +123,6 @@ if (isset($_POST['tool'])) { // если в скрипт пришли для к�
 
             $block_id = '';
             $block_id = $table_id[0]['idBlock'];
-//            foreach ($table_id as $string) {
-//                $block_id = $string['idBlock'];
-//            }
 
             echo json_encode($block_id);
         }
@@ -132,9 +139,6 @@ if (isset($_POST['tool'])) { // если в скрипт пришли для к�
 
             $position_id = '';
             $position_id = $table_id[0]['idBlock'];
-//            foreach ($table_id as $string) {
-//                $position_id = $string['idBlock'];
-//            }
 
             echo json_encode($position_id);
         }
@@ -151,9 +155,6 @@ if (isset($_POST['tool'])) { // если в скрипт пришли для к�
         $table_queue = $Database_wa->getRows($query, $condition);
         $queue = '';
         $queue = $table_queue[0]['queue'];
-//        foreach($table_queue as $string) {
-//            $queue = $string['queue']; // номер очереди
-//        }
 
         $query = "UPDATE wa_blocks_" . $subdomain . " SET queue = queue-1 WHERE queue > ?"; // сдвигаем все блоки наверх в очереди
         $condition = [$queue];
@@ -181,10 +182,7 @@ if (isset($_POST['tool'])) { // если в скрипт пришли для к�
         $table_queue = $Database_wa->getRows($query, $condition);
         $queue = '';
         $queue = $table_queue[0]['queue'];
-//        foreach($table_queue as $string) {
-//            $queue = $string['queue']; // номер очереди
-//        }
-
+        
         $query = "UPDATE wa_blocks_" . $subdomain . " SET queue=? WHERE queue=?";
 
         // В зависимости от направления двигаем блоки в очереди (задаем условия для прередвижения)
@@ -220,20 +218,30 @@ if (isset($_POST['tool'])) { // если в скрипт пришли для к�
             'token' => $token
         ];
 
-        file_put_contents(__DIR__."/logs/s1.txt",$apiURL);
         if ($apiURL == TEST_ACCESS_INSTANCE) {
+file_put_contents('logs/log1.json', "faфффil");
+            
+            function sum($carry, $phone)
+            {
+                global $Database_req, $subdomain;
+                $query = "SELECT * FROM `wa_requests` WHERE subdomain = '$subdomain' AND (client1 = ? OR  client2 = ? OR  client3 = ?)";
+                $condition = [$phone, $phone, $phone];
+                $table_id = $Database_req->getRows($query, $condition);
+                return $carry && count($table_id) == 1;
+            }
+
             $countMessages = getCountMessagesBySubdomain($subdomain);
-            file_put_contents(__DIR__."/logs/s2.txt",$countMessages);
-//            if ($countMessages <= 20) {
+            
+           // if ($countMessages > 20) {
+                $result=['success' => false, 'message'=>'Вы превысили лимит сообщений'];                
+           // } else
+             if(!array_reduce($phones, 'sum', true)) {
+                $result=['success'=> false, 'message'=>'Номер телефона не совпадает с указанными'];
+            } else{
                 $result = sendByAllContacts($subdomain, $phones, $message, $apiURL, $token);
-                file_put_contents(__DIR__."/logs/s3.txt",print_r($result, true));
-//            }
-//            else{
-//                $result=[0=>null];
-//            }
-            file_put_contents(__DIR__."/logs/s4.txt",print_r($result, true));
+            }
         } else {
-            $result = sendByAllContacts($subdomain, $phones, $message, $apiURL, $token);
+                $result = sendByAllContacts($subdomain, $phones, $message, $apiURL, $token);
         }
         echo json_encode($result);
     }
@@ -256,11 +264,6 @@ if (isset($_POST['tool'])) { // если в скрипт пришли для к�
             $state = $table_id[0]['state'];
         }
 
-//        foreach ($table_id as $string) {
-//            $curr_sub = $string['subdomain'];
-//            $fin_date = $string['date_access'];
-//        }
-
         $user_info = ['subdomain' => $curr_sub,
             'date' => $fin_date,
             'state' => $state];
@@ -274,45 +277,26 @@ if (isset($_POST['tool'])) { // если в скрипт пришли для к�
         $client_number = $_POST['client_number'];
         $client_subdomain = $_POST['client_subdomain'];
         $admin_email = $_POST['admin_email'];
-        $admin_api = $_POST['admin_api'];
 
         if ($client_number && $client_name) { // если номер корректный
 
-            $curr_date = date("Y-m-d H:i:s");
-            $query = "INSERT INTO wa_requests VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)";
-            $condition = [-1, $client_name, $client_number, $client_subdomain, $curr_date, NULL, 'start', '', '', '', '', $admin_email, $admin_api, '', 0];
-            $Database_req->insertRow($query, $condition);
+            //kondrashovanna@prosto.group
+            $mailto1 = "byrakova.lis@gmail.com"; // кому скидываются заявки
+            // $mailto2 = "zhuravlev@prosto.group"; // кому скидываются заявки
+            $subject = "Заявка на What'App";
+            $message = "Подана заявка" . "\n" .
+                "Имя клиента: " . $client_name . "\n" .
+                "Телефон: " . $client_number . "\n" .
+                "Субдомен: " . $client_subdomain;
+            $header = "From: email@prosto.group \r\n";
+
+            mail($mailto1, $subject, $message, $header);
+            mail($mailto2, $subject, $message, $header);
 
 
-            // находим id заявки
-            $query = "SELECT request_id FROM wa_requests ORDER BY request_id DESC LIMIT 1";
-            $table_id = $Database_req->getRows($query);
-
-            $req_id = '';
-            $req_id = $table_id[0]['request_id'];
-//            foreach ($table_id as $string) {
-//                $req_id = $string['request_id'];
-//            }
-
-            if ($req_id) { // если заявка добавилась
-                $mailto1 = "kondrashovanna@example.com"; // кому скидываются заявки
-                $mailto2 = "zhuravlev@example.com"; // кому скидываются заявки
-                $subject = "Заявка на What'App #" . $req_id;
-                $message = "Подана заявка" . "\n" .
-                    "Имя клиента: " . $client_name . "\n" .
-                    "Телефон: " . $client_number . "\n" .
-                    "Субдомен: " . $client_subdomain;
-                $header = "From: email@example.com \r\n";
-
-                mail($mailto1, $subject, $message, $header);
-                mail($mailto2, $subject, $message, $header);
-
-            }
-
-            echo json_encode($req_id);
+            echo json_encode(['success' => true]);
         } else { // если номер некорректный
-            $req_id = '';
-            echo json_encode($req_id);
+            echo json_encode(['success' => false]);
         }
     }
 
@@ -329,10 +313,6 @@ if (isset($_POST['tool'])) { // если в скрипт пришли для к�
 
         $fin_date = $table_id[0]['date_access'];
         $state = $table_id[0]['state'];
-//            foreach ($table_id as $string) {
-//                $fin_date = $string['date_access'];
-//                $state = $string['state'];
-//            }
 
         $data = ['date' => $fin_date,
             'state' => $state];
@@ -354,16 +334,13 @@ if (isset($_POST['tool'])) { // если в скрипт пришли для к�
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Информация о блоках сообщения                                                                                      //
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
     $subdomain = $_POST['subdomain'];
     $query = "SELECT idBlock, title, text FROM wa_blocks_" . $subdomain . " WHERE type != 'position' ORDER BY queue ASC";
     $table_blocks = $Database_wa->getRows($query);  // таблица с блоками сообщения
-
 //создаем массив вида:
 // [idBlock => [Название, Текст],
 //  idBlock => [Название, Текст],
 //   ...                        ]
-
     $block_info_array = [];
     foreach ($table_blocks as $string) {
         $id = $string['idBlock'];
@@ -371,6 +348,7 @@ if (isset($_POST['tool'])) { // если в скрипт пришли для к�
         $block_content_array = [$string['title'], $string['text']];
         $block_info_array += ['+' . $id => $block_content_array];
     }
+    
 //    echo "<b>Блоки: </b><br>";
 //    echo "<pre>";
 //    print_r($block_info_array);
@@ -416,5 +394,6 @@ if (isset($_POST['tool'])) { // если в скрипт пришли для к�
 //    echo "</pre>";
 
     // отправляем данные обратно на клиент в формате json
+
     echo json_encode([$block_info_array, $positions_array]);
 }
